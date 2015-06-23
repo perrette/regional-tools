@@ -11,3 +11,4 @@ build/*
 examples/*.nc
 python/dbg.cpp
 doc/method.pdf
+*so
