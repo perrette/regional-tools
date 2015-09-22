@@ -41,6 +41,7 @@ except:
 extension = Extension("dbg",
                       sources=["python/dbg.pyx",
                                "src/upslope_area.cc",
+                               "src/upstream_area.cc",
                                "src/accumulated_flow.cc",
                                "src/initialize_mask.cc",
                                "src/DEM.cc"

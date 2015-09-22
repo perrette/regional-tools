@@ -17,8 +17,8 @@ public:
   double *x, *y, *z;
   double spacing, dx, dy;
   int Mx, My;
-protected:
   double one_over_dx, one_over_dy;
+protected:
   void get_corner_values(int i, int j,
                          double &A, double &B, double &C, double &D);
   Array2D<double> elevation;

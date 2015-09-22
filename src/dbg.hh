@@ -7,6 +7,8 @@ int initialize_mask(int Mx, int My, double *thickness, int* mask);
 
 int upslope_area(double *x, int Mx, double *y, int My, double *z, int *mask, bool output);
 
+int upstream_area(double *x, int Mx, double *y, int My, double *z, double *u, double *v, int *mask, bool output);
+
 int accumulated_flow(double *x, int Mx, double *y, int My, double *z, double *my_mask, int n_samples);
 
 #endif /* _DBG_H_ */

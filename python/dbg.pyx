@@ -74,6 +74,46 @@ def upslope_area(np.ndarray[dtype=double_t, ndim=1] x,
 
     return output
 
+def upstream_area(np.ndarray[dtype=double_t, ndim=1] x,
+                 np.ndarray[dtype=double_t, ndim=1] y,
+                 np.ndarray[dtype=double_t, ndim=2, mode="c"] z,
+                 np.ndarray[dtype=double_t, ndim=2, mode="c"] u,
+                 np.ndarray[dtype=double_t, ndim=2, mode="c"] v,
+                 np.ndarray[dtype=int_t, ndim=2, mode="c"] mask,
+                 copy = False, print_output = False):
+    """
+    Computes the upstream_area area of points marked in the mask argument.
+
+    Ice-free cells should be marked with -1, icy cells to be processed with -2,
+    cells at termini (icy or not) with positive numbers, one per terminus.
+
+    Try initialize_mask(thickness) if you don't know where termini are.
+
+    arguments:
+    - x, y: 1D arrays with coordinates
+    - z: surface elevation, a 2D NumPy array
+    - u: x velocity component, a 2D NumPy array
+    - v: y velocity component, a 2D NumPy array
+    - mask: mask, integers, a 2D NumPy array
+    - copy: boolean; False if the mask is to be modified in place
+    """
+    cdef np.ndarray[dtype=int_t, ndim=2, mode="c"] output
+
+    check_dimensions(x, y, z, mask)
+    check_dimensions(x, y, u, v)
+
+    if copy:
+        output = mask.copy()
+    else:
+        output = mask
+
+    dbg_c.upstream_area(<double*>x.data, x.size, <double*>y.data, y.size,
+                       <double*>z.data, <double*>u.data, <double*>v.data, 
+                       <int*>output.data,
+                       print_output)
+
+    return output
+
 def accumulated_flow(np.ndarray[dtype=double_t, ndim=1] x,
                      np.ndarray[dtype=double_t, ndim=1] y,
                      np.ndarray[dtype=double_t, ndim=2, mode="c"] z,
