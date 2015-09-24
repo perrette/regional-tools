@@ -2,16 +2,37 @@
 #include "DEM.hh"
 #include <map>
 
+// Extend DEM class to use surface velocity instead of gradient
+class SurfaceData: public DEM {
+public:
+  SurfaceData(double *x, int Mx, double *y, int My, double *z, double *u, double *v);
+  ~SurfaceData() {}
+
+  void evaluate_vel(const double *position, double *vel);
+
+  double *u, *v;
+
+protected:
+  Array2D<double> vel_x, vel_y;
+};
+
+
+SurfaceData::SurfaceData(double *my_x, int my_Mx, double *my_y, int my_My, double *my_z, double *my_u, double *my_v)
+  : DEM(my_x, my_Mx, my_y, my_My, my_z), vel_x(my_Mx, my_My), vel_y(my_Mx, my_My) {
+
+  u   = my_u;
+  v   = my_v;
+  vel_x.wrap(u);
+  vel_y.wrap(v);
+}
 
 // like evaluate, but return velocity at a given position instead of elevation gradient
-void evaluate_vel(const double *position, double *vel, 
-        Array2D<double> *u, Array2D<double> *v, 
-        DEM* dem) {
+void SurfaceData::evaluate_vel(const double *position, double *vel) {
 
   int ierr, i, j;
   double A, B, C, D;
 
-  ierr = dem->find_cell(position, i, j);
+  ierr = this->find_cell(position, i, j);
 
   // Pretend that outside the grid the surface is perfectly flat, the elevation
   // of the sea level (0) and ice-free.
@@ -24,42 +45,49 @@ void evaluate_vel(const double *position, double *vel,
   }
 
   double
-    delta_x = position[0] - dem->x[i],
-    delta_y = position[1] - dem->y[j];
+    delta_x = position[0] - this->x[i],
+    delta_y = position[1] - this->y[j];
 
   // 
   double
-      alpha = dem->one_over_dx * delta_x,
-      beta  = dem->one_over_dy * delta_y;
+      alpha = this->one_over_dx * delta_x,
+      beta  = this->one_over_dy * delta_y;
 
-  A = (*u)(i,     j);
-  B = (*u)(i,     j + 1);
-  C = (*u)(i + 1, j + 1);
-  D = (*u)(i + 1, j);
+  A = this->vel_x(i,     j);
+  B = this->vel_x(i,     j + 1);
+  C = this->vel_x(i + 1, j + 1);
+  D = this->vel_x(i + 1, j);
   
   vel[0] =     ( (1 - alpha) * (1 - beta) * A +
                  (1 - alpha) *      beta  * B +
                  alpha       *      beta  * C +
                  alpha       * (1 - beta) * D );
   
-  A = (*v)(i,     j);
-  B = (*v)(i,     j + 1);
-  C = (*v)(i + 1, j + 1);
-  D = (*v)(i + 1, j);
+  A = this->vel_y(i,     j);
+  B = this->vel_y(i,     j + 1);
+  C = this->vel_y(i + 1, j + 1);
+  D = this->vel_y(i + 1, j);
   
   vel[1] =     ( (1 - alpha) * (1 - beta) * A +
                  (1 - alpha) *      beta  * B +
                  alpha       *      beta  * C +
                  alpha       * (1 - beta) * D );
 
-} // end of DEM::evaluate()
+} // end of SurfaceData::evaluate_vel()
 
+
+static int right_hand_side_vel(double t, const double y[], double f[], void* params) {
+
+  ((SurfaceData*)params)->evaluate_vel(y, f);
+
+  return GSL_SUCCESS;
+
+}
 
 
 static int streamline_vel(dbg_context ctx, int i_start, int j_start,
-                      Array2D<int> &old_mask, Array2D<int> &new_mask, 
-                      Array2D<double> &u, Array2D<double> &v) {
-  DEM *dem = (DEM*)ctx.system.params;
+                      Array2D<int> &old_mask, Array2D<int> &new_mask) {
+  SurfaceData *dem = (SurfaceData*)ctx.system.params;
 
   int mask_counter = 0,
     n_max = (dem->Mx + dem->My) * ctx.steps_per_cell,
@@ -69,6 +97,7 @@ static int streamline_vel(dbg_context ctx, int i_start, int j_start,
 
   double step_length = dem->spacing / ctx.steps_per_cell,
     position[2],
+    err[2],
     elevation,
     vel[2],
     vel_magnitude;
@@ -117,29 +146,29 @@ static int streamline_vel(dbg_context ctx, int i_start, int j_start,
     }
 
     // dem->evaluate(position, NULL, gradient);
-    evaluate_vel(position, vel, &u, &v, dem);
+    dem->evaluate_vel(position, vel);
 
     // gradient_magnitude = sqrt(gradient[0]*gradient[0] + gradient[1]*gradient[1]);
     vel_magnitude = sqrt(vel[0]*vel[0] + vel[1]*vel[1]);
 
     // take a step
-    // TODO: hand-written step, or change odeiv
     
-    if (vel_magnitude > 0) {
-        position[0] += vel[0] * (step_length/vel_magnitude);
-        position[1] += vel[1] * (step_length/vel_magnitude);
-    }
-
-    // status = gsl_odeiv_step_apply(ctx.step,
-    //                               0,         // starting time (irrelevant)
-    //                               step_length / vel_magnitude, // step size (units of time)
-    //                               // step_length / gradient_magnitude, // step size (units of time)
-    //                               position, err, NULL, NULL, &ctx.system);
-
-    // if (status != GSL_SUCCESS) {
-    //   printf ("error, return value=%d\n", status);
-    //   break;
+    // if (vel_magnitude > 0) {
+    //     double scal = step_length/vel_magnitude; 
+    //     position[0] += vel[0] * scal;
+    //     position[1] += vel[1] * scal;
     // }
+
+    status = gsl_odeiv_step_apply(ctx.step,
+                                  0,         // starting time (irrelevant)
+                                  step_length / vel_magnitude, // step size (units of time)
+                                  // step_length / gradient_magnitude, // step size (units of time)
+                                  position, err, NULL, NULL, &ctx.system);
+
+    if (status != GSL_SUCCESS) {
+      printf ("error, return value=%d\n", status);
+      break;
+    }
 
   } // time-stepping loop (step_counter)
 
@@ -164,16 +193,11 @@ static int streamline_vel(dbg_context ctx, int i_start, int j_start,
 }
 
 
-int upstream_area(double *x, int Mx, double *y, int My, double *z, double *uu, double *vv, int *mask, bool output) {
+int upstream_area(double *x, int Mx, double *y, int My, double *z, double *u, double *v, int *mask, bool output) {
   int remaining = 0;
   const double elevation_step = 10;
 
-  DEM dem(x, Mx, y, My, z);
-
-  // Define streamlines from velocity.
-  Array2D<double> u(Mx, My), v(Mx, My);
-  u.wrap(uu);
-  v.wrap(vv);
+  SurfaceData dem(x, Mx, y, My, z, u, v);
 
   Array2D<int> my_mask(Mx, My), new_mask(Mx, My);
   my_mask.wrap(mask);
@@ -182,7 +206,7 @@ int upstream_area(double *x, int Mx, double *y, int My, double *z, double *uu, d
 
 #pragma omp parallel default(shared)
   {
-    gsl_odeiv_system system = {right_hand_side, NULL, 2, &dem};
+    gsl_odeiv_system system = {right_hand_side_vel, NULL, 2, &dem};
     gsl_odeiv_step *step = gsl_odeiv_step_alloc(gsl_odeiv_step_rkf45, 2);
     dbg_context ctx = {system, step, 2, 5, 0, elevation_step};
 
@@ -203,7 +227,7 @@ int upstream_area(double *x, int Mx, double *y, int My, double *z, double *uu, d
 #pragma omp for schedule(dynamic) reduction(+:remaining)
       for (int j = 0; j < My; j++) { // Note: traverse in the optimal order
         for (int i = 0; i < Mx; i++) {
-          remaining += streamline_vel(ctx, i, j, my_mask, new_mask, u, v);
+          remaining += streamline_vel(ctx, i, j, my_mask, new_mask);
         }
       }
 
