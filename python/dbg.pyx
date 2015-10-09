@@ -83,6 +83,9 @@ def upstream_area(np.ndarray[dtype=double_t, ndim=1] x,
                  np.ndarray[dtype=double_t, ndim=2, mode="c"] u,
                  np.ndarray[dtype=double_t, ndim=2, mode="c"] v,
                  np.ndarray[dtype=int_t, ndim=2, mode="c"] mask,
+                 use_gsl = True,
+                 elevation_step = 10,
+                 path_length = 5,
                  copy = False, print_output = False):
     """
     Computes the upstream_area area of points marked in the mask argument.
@@ -113,7 +116,7 @@ def upstream_area(np.ndarray[dtype=double_t, ndim=1] x,
     dbg_c.upstream_area(<double*>x.data, x.size, <double*>y.data, y.size,
                        <double*>z.data, <double*>u.data, <double*>v.data, 
                        <int*>output.data,
-                       print_output)
+                       print_output, use_gsl, elevation_step, path_length)
 
     return output
 

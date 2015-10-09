@@ -86,7 +86,7 @@ static int right_hand_side_vel(double t, const double y[], double f[], void* par
 
 
 static int streamline_vel(dbg_context ctx, int i_start, int j_start,
-                      Array2D<int> &old_mask, Array2D<int> &new_mask) {
+                      Array2D<int> &old_mask, Array2D<int> &new_mask, bool use_gsl = true) {
   SurfaceData *dem = (SurfaceData*)ctx.system.params;
 
   int mask_counter = 0,
@@ -153,22 +153,30 @@ static int streamline_vel(dbg_context ctx, int i_start, int j_start,
 
     // take a step
     
-    // if (vel_magnitude > 0) {
-    //     double scal = step_length/vel_magnitude; 
-    //     position[0] += vel[0] * scal;
-    //     position[1] += vel[1] * scal;
-    // }
+    if (use_gsl) {
 
-    status = gsl_odeiv_step_apply(ctx.step,
-                                  0,         // starting time (irrelevant)
-                                  step_length / vel_magnitude, // step size (units of time)
-                                  // step_length / gradient_magnitude, // step size (units of time)
-                                  position, err, NULL, NULL, &ctx.system);
+        status = gsl_odeiv_step_apply(ctx.step,
+                                      0,         // starting time (irrelevant)
+                                      step_length / vel_magnitude, // step size (units of time)
+                                      // step_length / gradient_magnitude, // step size (units of time)
+                                      position, err, NULL, NULL, &ctx.system);
 
-    if (status != GSL_SUCCESS) {
-      printf ("error, return value=%d\n", status);
-      break;
-    }
+        if (status != GSL_SUCCESS) {
+          printf ("error, return value=%d\n", status);
+          break;
+        }
+
+    } else {
+
+        if (vel_magnitude > 0) {
+            double scal = step_length/vel_magnitude; 
+            position[0] += vel[0] * scal;
+            position[1] += vel[1] * scal;
+        } else {
+            break;
+        }
+    
+    };
 
   } // time-stepping loop (step_counter)
 
@@ -193,9 +201,10 @@ static int streamline_vel(dbg_context ctx, int i_start, int j_start,
 }
 
 
-int upstream_area(double *x, int Mx, double *y, int My, double *z, double *u, double *v, int *mask, bool output) {
+int upstream_area(double *x, int Mx, double *y, int My, double *z, double *u, double *v, int *mask, bool output, 
+        bool use_gsl, double elevation_step = 10, int path_length=5) {
   int remaining = 0;
-  const double elevation_step = 10;
+  // const double elevation_step = 10;
 
   SurfaceData dem(x, Mx, y, My, z, u, v);
 
@@ -208,7 +217,7 @@ int upstream_area(double *x, int Mx, double *y, int My, double *z, double *u, do
   {
     gsl_odeiv_system system = {right_hand_side_vel, NULL, 2, &dem};
     gsl_odeiv_step *step = gsl_odeiv_step_alloc(gsl_odeiv_step_rkf45, 2);
-    dbg_context ctx = {system, step, 2, 5, 0, elevation_step};
+    dbg_context ctx = {system, step, 2, path_length, 0, elevation_step};
 
 #pragma omp for schedule(dynamic)
     for (int j = 0; j < My; j++)
@@ -227,7 +236,7 @@ int upstream_area(double *x, int Mx, double *y, int My, double *z, double *u, do
 #pragma omp for schedule(dynamic) reduction(+:remaining)
       for (int j = 0; j < My; j++) { // Note: traverse in the optimal order
         for (int i = 0; i < Mx; i++) {
-          remaining += streamline_vel(ctx, i, j, my_mask, new_mask);
+          remaining += streamline_vel(ctx, i, j, my_mask, new_mask, use_gsl);
         }
       }
 
