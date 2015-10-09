@@ -2,8 +2,12 @@
 #include "DEM.hh"
 #include <map>
 
+#include <stdlib.h> 
+#include <iostream>
+using namespace std ;
+
 static int streamline(dbg_context ctx, int i_start, int j_start,
-                      Array2D<int> &old_mask, Array2D<int> &new_mask) {
+                      Array2D<int> &old_mask, Array2D<int> &new_mask, bool use_gsl = true) {
   DEM *dem = (DEM*)ctx.system.params;
 
   int mask_counter = 0,
@@ -66,15 +70,28 @@ static int streamline(dbg_context ctx, int i_start, int j_start,
     gradient_magnitude = sqrt(gradient[0]*gradient[0] + gradient[1]*gradient[1]);
 
     // take a step
-    status = gsl_odeiv_step_apply(ctx.step,
-                                  0,         // starting time (irrelevant)
-                                  step_length / gradient_magnitude, // step size (units of time)
-                                  position, err, NULL, NULL, &ctx.system);
+      
+    if (use_gsl) {
 
-    if (status != GSL_SUCCESS) {
-      printf ("error, return value=%d\n", status);
-      break;
+        status = gsl_odeiv_step_apply(ctx.step,
+                0,         // starting time (irrelevant)
+                step_length / gradient_magnitude, // step size (units of time)
+                position, err, NULL, NULL, &ctx.system);
+
+        // if (verbose) cout << "done (status= " << status << ")" << endl;
+        if (status != GSL_SUCCESS) {
+            printf ("error, return value=%d\n", status);
+            break;
+        }
+
+    } else {
+        float scal = step_length / gradient_magnitude ;
+        position[0] = position[0] - gradient[0] * scal; 
+        position[1] = position[1] - gradient[1] * scal; 
     }
+
+    // if (step_counter == n_max - 1)
+    //     cout << "step_counter > n_max" << i_start << "," << j_start << "-->" << i << ", " << j << "(" << step_counter << "steps)" << endl;
 
   } // time-stepping loop (step_counter)
 
@@ -98,9 +115,10 @@ static int streamline(dbg_context ctx, int i_start, int j_start,
   return 0;
 }
 
-int upslope_area(double *x, int Mx, double *y, int My, double *z, int *mask, bool output) {
+int upslope_area(double *x, int Mx, double *y, int My, double *z, int *mask, bool output, bool use_gsl, double elevation_step = 10, int path_length=5) {
   int remaining = 0;
-  const double elevation_step = 10;
+  // const double elevation_step = 10;
+  // int iters = 0;
 
   DEM dem(x, Mx, y, My, z);
 
@@ -113,7 +131,7 @@ int upslope_area(double *x, int Mx, double *y, int My, double *z, int *mask, boo
   {
     gsl_odeiv_system system = {right_hand_side, NULL, 2, &dem};
     gsl_odeiv_step *step = gsl_odeiv_step_alloc(gsl_odeiv_step_rkf45, 2);
-    dbg_context ctx = {system, step, 2, 5, 0, elevation_step};
+    dbg_context ctx = {system, step, 2, path_length, 0, elevation_step};
 
 #pragma omp for schedule(dynamic)
     for (int j = 0; j < My; j++)
@@ -129,10 +147,14 @@ int upslope_area(double *x, int Mx, double *y, int My, double *z, int *mask, boo
 #pragma omp single
       remaining = 0;
 
+    // cout << "evaluate gradient..." << endl;
+    // ++iters ;
+    // cout << "iterations: " << iters << endl;
+
 #pragma omp for schedule(dynamic) reduction(+:remaining)
       for (int j = 0; j < My; j++) { // Note: traverse in the optimal order
         for (int i = 0; i < Mx; i++) {
-          remaining += streamline(ctx, i, j, my_mask, new_mask);
+          remaining += streamline(ctx, i, j, my_mask, new_mask, use_gsl);
         }
       }
 
