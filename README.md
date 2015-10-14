@@ -1,77 +1,9 @@
 # PISM Drainage basin delineation tool
 
-## Overview
+Experimental extensions to the package originally developped for PISM.
+See fork information on github for the original code and appropriate documentation.
 
-Regional modeling of outlet glacier flows using PISM requires isolating a
-drainage basin.
-
-Our goal was to develop a tool using surface topography to divide an ice sheet
-into smaller basins.  On the one hand, we do not want to use measured ice
-surface velocities because they may not be available in some cases
-(for example, paleo-glacial applications).  On the other hand, we observe that
-existing hydrologic drainage basin generators (for example,
-[topotoolbox](http://physiogeo.unibas.ch/topotoolbox/)) generate poor outlines
-to their drainage basins because (ironically) of the smooth surface topography
-of ice sheets.
-
-Please see `doc/method.tex` (unfinished) for further details of our numerical
-strategy, and some references to the literature of the ice sheet drainage
-basin problem.
-
-## Requirements
-
-The C code that does the heavy lifting uses an ODE solver from
-[GSL](http://www.gnu.org/software/gsl/), although hand-coding one of standard
-time-stepping methods would probably result in code that performs about as
-well.
-
-This code can be used separately (i.e. in a C-only program).
-
-In addition to using GSL, some functions are parallelized using OpenMP, so a
-compiler supporting OpenMP 2.5 or later is needed (GCC 4.2 and later is OK.)
-
-[Cython](http://cython.org/) is used to make the C code mentioned above
-available from Python.
-
-The wrapper script `pism_regional.py` uses several Python modules, notably
-
-- [netcdf4-python](http://code.google.com/p/netcdf4-python/) for NetCDF I/O
-- [NumPy](http://numpy.scipy.org/) for 2D arrays, etc
-- [matplotlib](http://matplotlib.sourceforge.net/) for plotting
-- [Tkinter](http://wiki.python.org/moin/TkInter) for the GUI
-
-All these libraries and packages are available via a package manager on
-Linux systems.
-
-## Installation
-
-To install for the current user, run
-
-    python setup.py install --user
-
-To build and use from the current directory, run
-
-    python setup.py build_ext --inplace
-
-To disable OpenMP, run
-
-    NO_OPENMP=1 python setup.py ...
-
-If you have GSL in a non-standard location, run
-
-    GSL_PREFIX=/path/to/gsl python setup.py ...
-
-On systems where the default compiler does not support OpenMP you can specify
-the compiler to use like this:
-
-    CC=gcc-4.2 CXX=g++-4.2 python setup.py ...
-
-## Usage
-
-- Run `pism_regional.py`. Select a NetCDF file containing variables `x`,
-   `y`, `usurf`, and `thk`.
-- Select the terminus region using the mouse.
-- Click "Compute the drainage basin mask"
-- Repeat the terminus region selection and re-generate the mask if necessary
-- Save the mask to a file.
-- Quit the script by closing all windows.
+These changes include:
+- possibility of passing a vector field (`upstream_area`) instead of originally just surface elevation (`upslope_area`).
+- possibility of using or not the GSL RKF45 stepping algorithm via a new `use_gsl` parameter, and of specifying a few
+other parameters such as `elevation_step` and `path_length`.
