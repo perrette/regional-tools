@@ -11,4 +11,8 @@ int upstream_area(double *x, int Mx, double *y, int My, double *z, double *u, do
 
 int accumulated_flow(double *x, int Mx, double *y, int My, double *z, double *my_mask, int n_samples);
 
+int particle_tracking(double *x, int Mx, double *y, int My, double *z, double *u, double *v, int *mask, 
+        double x0, double y0,
+        double *xl , double *yl, int *il, int *jl, int &nl, int n_max, bool use_gsl);
+
 #endif /* _DBG_H_ */

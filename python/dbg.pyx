@@ -149,3 +149,90 @@ def accumulated_flow(np.ndarray[dtype=double_t, ndim=1] x,
                            <double*>z.data, <double*>output.data, n_samples)
 
     return output
+
+def streamline_downslope(x0, y0, 
+                         np.ndarray[dtype=double_t, ndim=1] x,
+                         np.ndarray[dtype=double_t, ndim=1] y,
+                         np.ndarray[dtype=double_t, ndim=2, mode="c"] z,
+                         np.ndarray[dtype=int_t, ndim=2, mode="c"] mask,
+                         n_max = -1,
+                         use_gsl = True):
+    """
+    Parameters
+    ----------
+    x0, y0 : starting point
+    x, y : grid (1-D arrays)
+    z : elevation (2-D array)
+    mask :  (int 2-D array) indicate valid areas
+    n_max : int, optional
+        maximum flowline length (default to -1 ==> x.size + y.size)
+    use_gsl : bool, optional
+        use GSL RFK45 library (default to True)
+
+    Returns
+    -------
+    xl, yl : 1-D numpy array
+    """
+    cdef np.ndarray[dtype=double_t, ndim=1, mode="c"] xl, yl
+    cdef np.ndarray[dtype=int_t, ndim=1, mode="c"] jl, il
+    cdef int nl
+
+    nl = 0
+
+    if n_max < 0:
+        n_max = x.size + y.size
+
+    xl = np.empty(n_max, dtype=np.float64)
+    yl = np.empty(n_max, dtype=np.float64)
+    il = np.empty(n_max, dtype=np.int32)
+    jl = np.empty(n_max, dtype=np.int32)
+
+    # dbg_c.particle_tracking(<double*>x.data, x.size, <double*>y.data, y.size, <double*> z.data, NULL, NULL, <int*>mask.data,
+    dbg_c.particle_tracking(<double*>x.data, x.size, <double*>y.data, y.size, <double*> z.data, NULL, NULL, <int*>mask.data,
+                            x0, y0, <double*> xl.data, <double*> yl.data, <int*> il.data, <int*> jl.data, nl, xl.size, use_gsl)
+
+    return xl[:nl], yl[:nl]
+
+def streamline(x0, y0, 
+               np.ndarray[dtype=double_t, ndim=1] x,
+               np.ndarray[dtype=double_t, ndim=1] y,
+               np.ndarray[dtype=double_t, ndim=2, mode="c"] u,
+               np.ndarray[dtype=double_t, ndim=2, mode="c"] v,
+               np.ndarray[dtype=int_t, ndim=2, mode="c"] mask,
+               n_max = -1,
+               use_gsl = True):
+    """
+    Parameters
+    ----------
+    x0, y0 : starting point
+    x, y : grid (1-D arrays)
+    u, v : u and v vector components (2-D array)
+    mask :  (int 2-D array) indicate valid areas
+    n_max : int, optional
+        maximum flowline length (default to -1 ==> x.size + y.size)
+    use_gsl : bool, optional
+        use GSL RFK45 library (default to True)
+
+    Returns
+    -------
+    xl, yl : 1-D numpy array
+    """
+    cdef np.ndarray[dtype=double_t, ndim=1, mode="c"] xl, yl
+    cdef np.ndarray[dtype=int_t, ndim=1, mode="c"] jl, il
+    cdef int nl
+
+    nl = 0
+
+    if n_max < 0:
+        n_max = x.size + y.size
+
+    xl = np.empty(n_max, dtype=np.float64)
+    yl = np.empty(n_max, dtype=np.float64)
+    il = np.empty(n_max, dtype=np.int32)
+    jl = np.empty(n_max, dtype=np.int32)
+
+    # dbg_c.particle_tracking(<double*>x.data, x.size, <double*>y.data, y.size, <double*> z.data, NULL, NULL, <int*>mask.data,
+    dbg_c.particle_tracking(<double*>x.data, x.size, <double*>y.data, y.size, NULL, <double*> u.data, <double*> v.data, <int*>mask.data,
+                            x0, y0, <double*> xl.data, <double*> yl.data, <int*> il.data, <int*> jl.data, nl, xl.size, use_gsl)
+
+    return xl[:nl], yl[:nl]
